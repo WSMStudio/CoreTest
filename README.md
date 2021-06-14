@@ -3,17 +3,29 @@
 
 运行以下命令
 ```shell
-python tests.py
+python server.py
 ```
 然后访问
 ```text
 localhost:8000
 ```
-在搜索框中输入
+在搜索框中分别输入以下命令进行测试
 ```text
-and pre/2 obtained
+to /1 the
+to /2 the
+to /3 the
+to /4 the
 ```
-点击搜索按钮，得到查询结果：同时含有and和obtained的上下文，从and前5个单词到obtained后5个单词结束。
+点击搜索按钮，或在输入框中回车，得到查询结果：同时含有to和the的上下文，从to前5个单词到the后5个单词结束。
 
-已知BUG：
-+ `and pre/1 the`查不到结果，算法有问题
+已知鲁棒性：
++ 命令不完整返回错误码`{"code": -1}`
++ 结果为空返回空列表，显示`No result found`
+
+TODO列表:
++ 返回结果按照`docID`折叠
++ 支持同段查询，同句查询
++ 单独实现`Query Parser`
++ 实现无顺序查询
++ 实现空格查询的等价
+
