@@ -1,5 +1,35 @@
+from flask import Flask
+from flask import request
+from flask import render_template
+from flask import Response, json
+from gevent import pywsgi
 import heapq
 import re
+
+app = Flask(__name__, template_folder="templates", static_folder="statics", static_url_path="/static")
+
+
+@app.route('/', methods=['GET'])
+def paste():
+    return render_template("index.html")
+
+
+@app.route('/search', methods=['POST'])
+def search():
+    # GET: request.args.get('text')
+    query = request.form.get('query').split()
+    if len(query) < 3:
+        return Response(json.dumps({'code': -1}), content_type='application/json')
+    q1, op, q2 = query
+    k = int(op.split("/")[-1])
+    response = []
+    for doc, w1, w2 in proximity(q1, q2, k, index):
+        words = re.split(r"[\s]", docs_raw[doc])
+        context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
+        context = context.replace(words[w1], f"<span class='highlight'>{words[w1]}</span>") \
+                         .replace(words[w2], f"<span class='highlight'>{words[w2]}</span>")
+        response.append([context, str(doc + 1)])
+    return Response(json.dumps({'data': response}), content_type='application/json')
 
 
 def buildIndex(docs: list):
@@ -62,4 +92,8 @@ index = buildIndex(docs)
 with open('statics/doc/documents.txt', 'r') as reader:
     docs_raw = reader.read().split("\n\n")
 
-print(proximity("and", "the", 1, index))
+server = pywsgi.WSGIServer(("localhost", 8000), app)
+try:
+    server.serve_forever()
+except KeyboardInterrupt:
+    print('Searching Engine stopped serving.')
