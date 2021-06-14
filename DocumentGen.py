@@ -37,5 +37,5 @@ if __name__ == '__main__':
         " ".join(np.random.choice(words, np.random.randint(5, 15)))
         for j in range(np.random.randint(3, 5))]
     ) + "." for i in range(20)]
-    with open("documents.txt", "w") as writer:
+    with open("statics/doc/documents.txt", "w") as writer:
         writer.write('\n'.join(documents))

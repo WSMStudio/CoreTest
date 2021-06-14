@@ -23,7 +23,10 @@ def search():
     response = []
     for doc, w1, w2 in proximity(q1, q2, k, index):
         words = re.split(r"[\s]", docs_raw[doc])
-        response.append(" ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)]))
+        context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
+        context = context.replace(words[w1], f"<span class='highlight'>{words[w1]}</span>") \
+                         .replace(words[w2], f"<span class='highlight'>{words[w2]}</span>")
+        response.append(context)
     return Response(json.dumps({'data': response}), content_type='application/json')
 
 
@@ -70,19 +73,19 @@ def proximity(q1, q2, k, index):
     return answer
 
 
-with open('documents.txt', 'r') as reader:
+with open('statics/doc/documents.txt', 'r') as reader:
     docs = []
     for document in reader.read().split('\n\n'):
         doc = []
         for para in document.split('\n'):
-            para = re.sub(r'[,\'\":-]', "", para)
+            para = re.sub(r'[,\'\":]', "", para)
             sens = re.split(r'[\.\?!]', para)
             sens = [sen for sen in sens if sen]
             doc.append(sens)
         docs.append(doc)
 
 index = buildIndex(docs)
-with open('documents.txt', 'r') as reader:
+with open('statics/doc/documents.txt', 'r') as reader:
     docs_raw = reader.read().split("\n\n")
 
 server = pywsgi.WSGIServer(("localhost", 8000), app)
