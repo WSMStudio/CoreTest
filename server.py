@@ -26,8 +26,8 @@ def search():
     for doc, w1, w2 in proximity(q1, q2, k, index):
         words = re.split(r"[\s]", docs_raw[doc])
         context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
-        context = context.replace(words[w1], f"<span class='highlight'>{words[w1]}</span>") \
-                         .replace(words[w2], f"<span class='highlight'>{words[w2]}</span>")
+        context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
+                         .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
         response.append([context, str(doc + 1)])
     return Response(json.dumps({'data': response}), content_type='application/json')
 
