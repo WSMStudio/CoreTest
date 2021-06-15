@@ -26,6 +26,7 @@ def search():
     for doc, value in sorted(indexer.proximity(q1, q2, k, where=where, pre=pre).items(), key=lambda x: x[0]):
         for w1, w2 in value:
             words = re.split(r"[\s]", indexer.docs_raw[doc])
+            w1, w2 = min(w1, w2), max(w1, w2)
             context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
             context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
                 .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
