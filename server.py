@@ -98,9 +98,15 @@ class Indexer:
                     if cp2:
                         cp1 = [p for p in p1 if p[0] == pid]
                         answer += self.foo(cp1, cp2, doc_id, pre, k)
-                        # print(pid)
         elif where == 'S':
-            pass
+            for doc_id in doc_candidates:
+                p1 = self.index[q1][doc_id]
+                p2 = self.index[q2][doc_id]
+                for pid, sid in set([p[:2] for p in p1]):
+                    cp2 = [p for p in p2 if p[0] == pid and p[1] == sid]
+                    if cp2:
+                        cp1 = [p for p in p1 if p[0] == pid and p[1] == sid]
+                        answer += self.foo(cp1, cp2, doc_id, pre, k)
         print(answer)
         return answer
 
