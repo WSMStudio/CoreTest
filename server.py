@@ -17,20 +17,37 @@ def paste():
 @app.route('/search', methods=['POST'])
 def search():
     # GET: request.args.get('text')
-    query = request.form.get('query').split()
-    if len(query) < 3:
+    query = request.form.get('query')
+    parsed_query = Parser(query)
+    if not parsed_query:
         return Response(json.dumps({'code': -1}), content_type='application/json')
-    q1, op, q2 = query
-    pre, foo = op.split("/")
-    where, k = foo.split('^')
+    q1, q2, k, where, pre = parsed_query
     response = []
-    for doc, w1, w2 in indexer.proximity(q1, q2, int(k), where=where.upper(), pre=bool(pre)):
+    for doc, w1, w2 in indexer.proximity(q1, q2, k, where=where, pre=pre):
         words = re.split(r"[\s]", indexer.docs_raw[doc])
         context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
         context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
             .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
         response.append([context, str(doc + 1)])
     return Response(json.dumps({'data': response}), content_type='application/json')
+
+
+def Parser(query):
+    query = query.split()
+    if len(query) < 3: return None
+    q1, op, q2 = query
+    pre, foo = op.split("/")
+    if "^" in foo:
+        where, k = foo.split('^')
+        where = where.upper()
+        k = 0 if k == '-' else int(k)
+    elif foo.upper() == 'S':
+        where, k = 'S', 0
+    elif foo.upper() == 'P':
+        where, k = 'P', 0
+    else:
+        where, k = 'D', int(foo)
+    return q1, q2, k, where, pre != ""
 
 
 class Indexer:
