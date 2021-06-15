@@ -22,13 +22,14 @@ def search():
     if not parsed_query:
         return Response(json.dumps({'code': -1}), content_type='application/json')
     q1, q2, k, where, pre = parsed_query
-    response = []
-    for doc, w1, w2 in indexer.proximity(q1, q2, k, where=where, pre=pre):
-        words = re.split(r"[\s]", indexer.docs_raw[doc])
-        context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
-        context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
-            .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
-        response.append([context, str(doc + 1)])
+    response = {}
+    for doc, value in sorted(indexer.proximity(q1, q2, k, where=where, pre=pre).items(), key=lambda x: x[0]):
+        for w1, w2 in value:
+            words = re.split(r"[\s]", indexer.docs_raw[doc])
+            context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
+            context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
+                .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
+            response.setdefault(doc, []).append(context)
     return Response(json.dumps({'data': response}), content_type='application/json')
 
 
@@ -71,7 +72,7 @@ class Indexer:
         return self.index
 
     def foo(self, p1, p2, doc, pre, k):
-        answer = []
+        answer = {}
         within_k = (lambda x, y: x - y <= k) if pre else (lambda x, y: abs(x - y) <= k)
         within_k_0 = (lambda x, y: 0 < x - y <= k) if pre else within_k
         pp1 = pp2 = 0
@@ -79,7 +80,7 @@ class Indexer:
             if pre and p2[pp2][-1] - p1[pp1][-1] < 0:
                 pp2 += 1
             elif within_k(p2[pp2][-1], p1[pp1][-1]):
-                answer.append((doc, p1[pp1][-1], p2[pp2][-1]))
+                answer.setdefault(doc, []).append((p1[pp1][-1], p2[pp2][-1]))
                 if p2[pp2][-1] > p1[pp1][-1]:
                     pp2 += 1
                 else:
@@ -91,21 +92,21 @@ class Indexer:
                     pp2 += 1
         for i in range(pp1 + 1, len(p1)):
             if within_k_0(p2[-1][-1], p1[i][-1]):
-                answer.append((doc, p1[i][-1], p2[-1][-1]))
+                answer.setdefault(doc, []).append((p1[i][-1], p2[-1][-1]))
         for i in range(pp2 + 1, len(p2)):
             if within_k_0(p2[i][-1], p1[-1][-1]):
-                answer.append((doc, p1[-1][-1], p2[i][-1]))
+                answer.setdefault(doc, []).append((p1[-1][-1], p2[i][-1]))
         return answer
 
     def proximity(self, q1, q2, k, where='D', pre=False):
-        answer = []
+        answer = {}
         if not (q1 in self.index and q2 in self.index): return answer
         doc_candidates = set(self.index[q1].keys()) & set(self.index[q2].keys())
         if where == 'D':
             for doc_id in doc_candidates:
                 p1 = self.index[q1][doc_id]
                 p2 = self.index[q2][doc_id]
-                answer += self.foo(p1, p2, doc_id, pre, k)
+                answer.update(self.foo(p1, p2, doc_id, pre, k))
         elif where == 'P':
             for doc_id in doc_candidates:
                 p1 = self.index[q1][doc_id]
@@ -114,7 +115,7 @@ class Indexer:
                     cp2 = [p for p in p2 if p[0] == pid]
                     if cp2:
                         cp1 = [p for p in p1 if p[0] == pid]
-                        answer += self.foo(cp1, cp2, doc_id, pre, k)
+                        answer.update(self.foo(cp1, cp2, doc_id, pre, k))
         elif where == 'S':
             for doc_id in doc_candidates:
                 p1 = self.index[q1][doc_id]
@@ -123,7 +124,7 @@ class Indexer:
                     cp2 = [p for p in p2 if p[0] == pid and p[1] == sid]
                     if cp2:
                         cp1 = [p for p in p1 if p[0] == pid and p[1] == sid]
-                        answer += self.foo(cp1, cp2, doc_id, pre, k)
+                        answer.update(self.foo(cp1, cp2, doc_id, pre, k))
         print(answer)
         return answer
 

@@ -10,14 +10,17 @@ $(function() {
             success: function(response) {
                 console.log(response);
                 var list = "";
-                var len = response.data.length;
-                if (len == 0) {
-                    list = "No result found !";
-                } else {
-                    for (var i = 0; i < len; i++) {
-                        list += "<a href='#' class='list-group-item list-group-item-action'><span class='from'>Document " 
-                        + response.data[i][1] + "</span> ... " + response.data[i][0] + " ... </a>";
+                var flag = true;
+                for (var doc_id in response.data) {
+                    list += "<li style='list-style: none;'><a class='from'>Document " + doc_id.toString() + "</a><ul class='list-group'>";
+                    for (var ans in response.data[doc_id]) {
+                        list += "<a href='#' class='list-group-item list-group-item-action'>... " + response.data[doc_id][ans] + " ... </a>";
                     }
+                    list += "</ul></li>";
+                    flag = false;
+                }
+                if (flag) {
+                    list = "No result found !";
                 }
                 $("#result_list").hide()
                 $("#result_list").html(list);

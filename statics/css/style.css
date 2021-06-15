@@ -61,13 +61,17 @@ body {
 }
 
 #result_list .from {
-    margin-left: 5px;
+    line-height: 40px;
     background: #002c9c70;
     font-size: 14px;
     border-radius: 5px;
     padding: 2px 5px;
     color: white;
     font-family: georgia;
+}
+
+#result_list .from:hover {
+    cursor: pointer;
 }
 
 #result_list {
