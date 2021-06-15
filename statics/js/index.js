@@ -14,7 +14,7 @@ $(function() {
                 for (var doc_id in response.data) {
                     list += "<li style='list-style: none;'><a class='from'>Document " + doc_id.toString() + "</a><ul class='list-group'>";
                     for (var ans in response.data[doc_id]) {
-                        list += "<a href='#' class='list-group-item list-group-item-action'>... " + response.data[doc_id][ans] + " ... </a>";
+                        list += "<a class='list-group-item list-group-item-action'>... " + response.data[doc_id][ans] + " ... </a>";
                     }
                     list += "</ul></li>";
                     flag = false;

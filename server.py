@@ -42,11 +42,11 @@ def Parser(query):
     if "^" in foo:
         where, k = foo.split('^')
         where = where.upper()
-        k = 0 if k == '-' else int(k)
+        k = 1e9 if k == '-' else int(k)
     elif foo.upper() == 'S':
-        where, k = 'S', 0
+        where, k = 'S', 1e9
     elif foo.upper() == 'P':
-        where, k = 'P', 0
+        where, k = 'P', 1e9
     else:
         where, k = 'D', int(foo)
     return q1, q2, k, where, pre != ""
@@ -116,7 +116,8 @@ class Indexer:
                     cp2 = [p for p in p2 if p[0] == pid]
                     if cp2:
                         cp1 = [p for p in p1 if p[0] == pid]
-                        answer.update(self.foo(cp1, cp2, doc_id, pre, k))
+                        for key, value in self.foo(cp1, cp2, doc_id, pre, k).items():
+                            answer.setdefault(key, []).extend(value)
         elif where == 'S':
             for doc_id in doc_candidates:
                 p1 = self.index[q1][doc_id]
@@ -125,7 +126,8 @@ class Indexer:
                     cp2 = [p for p in p2 if p[0] == pid and p[1] == sid]
                     if cp2:
                         cp1 = [p for p in p1 if p[0] == pid and p[1] == sid]
-                        answer.update(self.foo(cp1, cp2, doc_id, pre, k))
+                        for key, value in self.foo(cp1, cp2, doc_id, pre, k).items():
+                            answer.setdefault(key, []).extend(value)
         print(answer)
         return answer
 

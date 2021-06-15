@@ -22,7 +22,6 @@ to pre/4 the
 to pre/d^4 the
 said /4 will
 said /s^4 will
-# 以下两个命令有BUG，啊烦
 the /4 that
 the /p^4 that
 ```
