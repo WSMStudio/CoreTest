@@ -21,77 +21,92 @@ def search():
     if len(query) < 3:
         return Response(json.dumps({'code': -1}), content_type='application/json')
     q1, op, q2 = query
-    k = int(op.split("/")[-1])
+    pre, foo = op.split("/")
+    where, k = foo.split('^')
     response = []
-    for doc, w1, w2 in proximity(q1, q2, k, index):
-        words = re.split(r"[\s]", docs_raw[doc])
+    for doc, w1, w2 in indexer.proximity(q1, q2, int(k), where=where.upper(), pre=bool(pre)):
+        words = re.split(r"[\s]", indexer.docs_raw[doc])
         context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
         context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
-                         .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
+            .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
         response.append([context, str(doc + 1)])
     return Response(json.dumps({'data': response}), content_type='application/json')
 
 
-def buildIndex(docs: list):
-    index = {}
-    for doc_id, doc in enumerate(docs):
-        word_id, sen_id = 0, 0
-        for para_id, para in enumerate(doc):
-            for sen in para:
-                for word in sen.split():
-                    if word not in index:
-                        index[word] = {doc_id: [word_id]}
-                    elif doc_id not in index[word]:
-                        index[word][doc_id] = [word_id]
-                    else:
-                        heapq.heappush(index[word][doc_id], word_id)
-                    word_id += 1
-                sen_id += 1
-    return index
+class Indexer:
 
+    def __init__(self):
+        with open('statics/doc/documents.txt', 'r') as reader:
+            self.docs_raw = reader.read().split("\n\n")
+        self.index = {}
 
-def proximity(q1, q2, k, index):
-    answer = []
-    if not (q1 in index and q2 in index): return answer
-    doc_candidates = set(index[q1].keys()) & set(index[q2].keys())
-    for doc in doc_candidates:
-        p1 = index[q1][doc]
-        p2 = index[q2][doc]
+    def buildIndex(self):
+        with open('statics/doc/documents.txt', 'r') as reader:
+            docs = reader.read()
+        for doc_id, doc in enumerate(docs.split('\n\n')):
+            word_id = 0
+            for para_id, para in enumerate(doc.split('\n')):
+                para = re.sub(r'[,\'\":]', "", para)
+                for sen_id, sen in enumerate(re.split(r'[\.\?!]', para)):
+                    for word in sen.split():
+                        self.index.setdefault(word, {}).setdefault(doc_id, []).append((para_id, sen_id, word_id))
+                        word_id += 1
+        return self.index
+
+    def foo(self, p1, p2, doc, pre, k):
+        answer = []
+        within_k = (lambda x, y: x - y <= k) if pre else (lambda x, y: abs(x - y) <= k)
+        within_k_0 = (lambda x, y: 0 < x - y <= k) if pre else within_k
         pp1 = pp2 = 0
-        print(f"{p1}, {p2}")
         while pp1 < len(p1) and pp2 < len(p2):
-            if p2[pp2] - p1[pp1] < 0:
+            if pre and p2[pp2][-1] - p1[pp1][-1] < 0:
                 pp2 += 1
-            elif p2[pp2] - p1[pp1] <= k:
-                answer.append((doc, p1[pp1], p2[pp2]))
-                pp2 += 1
+            elif within_k(p2[pp2][-1], p1[pp1][-1]):
+                answer.append((doc, p1[pp1][-1], p2[pp2][-1]))
+                if p2[pp2][-1] > p1[pp1][-1]:
+                    pp2 += 1
+                else:
+                    pp1 += 1
             else:
-                pp1 += 1
+                if p2[pp2][-1] > p1[pp1][-1]:
+                    pp1 += 1
+                else:
+                    pp2 += 1
         for i in range(pp1 + 1, len(p1)):
-            if 0 < p2[-1] - p1[i] <= k:
-                answer.append((doc, p1[i], p2[-1]))
+            if within_k_0(p2[-1][-1], p1[i][-1]):
+                answer.append((doc, p1[i][-1], p2[-1][-1]))
         for i in range(pp2 + 1, len(p2)):
-            if 0 < p2[i] - p1[-1] <= k:
-                answer.append((doc, p1[-1], p2[i]))
-    print(answer)
-    return answer
+            if within_k_0(p2[i][-1], p1[-1][-1]):
+                answer.append((doc, p1[-1][-1], p2[i][-1]))
+        return answer
+
+    def proximity(self, q1, q2, k, where='D', pre=False):
+        answer = []
+        if not (q1 in self.index and q2 in self.index): return answer
+        doc_candidates = set(self.index[q1].keys()) & set(self.index[q2].keys())
+        if where == 'D':
+            for doc_id in doc_candidates:
+                p1 = self.index[q1][doc_id]
+                p2 = self.index[q2][doc_id]
+                answer += self.foo(p1, p2, doc_id, pre, k)
+        elif where == 'P':
+            for doc_id in doc_candidates:
+                p1 = self.index[q1][doc_id]
+                p2 = self.index[q2][doc_id]
+                for pid in set([p[0] for p in p1]):
+                    cp2 = [p for p in p2 if p[0] == pid]
+                    if cp2:
+                        cp1 = [p for p in p1 if p[0] == pid]
+                        answer += self.foo(cp1, cp2, doc_id, pre, k)
+                        # print(pid)
+        elif where == 'S':
+            pass
+        print(answer)
+        return answer
 
 
-with open('statics/doc/documents.txt', 'r') as reader:
-    docs = []
-    for document in reader.read().split('\n\n'):
-        doc = []
-        for para in document.split('\n'):
-            para = re.sub(r'[,\'\":]', "", para)
-            sens = re.split(r'[\.\?!]', para)
-            sens = [sen for sen in sens if sen]
-            doc.append(sens)
-        docs.append(doc)
-
-index = buildIndex(docs)
-with open('statics/doc/documents.txt', 'r') as reader:
-    docs_raw = reader.read().split("\n\n")
-
+indexer = Indexer()
+indexer.buildIndex()
 server = pywsgi.WSGIServer(("localhost", 8000), app)
 try:
     server.serve_forever()
