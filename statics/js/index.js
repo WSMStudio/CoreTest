@@ -19,7 +19,9 @@ $(function() {
                         + response.data[i][1] + "</span> ... " + response.data[i][0] + " ... </a>";
                     }
                 }
+                $("#result_list").hide()
                 $("#result_list").html(list);
+                $("#result_list").fadeIn(500);
                 $("#search_input").val("");
                 return false;
             }
