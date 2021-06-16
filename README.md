@@ -31,5 +31,4 @@ the /p^4 that
 + 结果为空返回空列表，显示`No result found`
 
 TODO列表:
-+ 实现不定长度查询
 + 实现空格查询的等价
