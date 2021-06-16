@@ -17,6 +17,7 @@ class Indexer:
         with open('statics/doc/documents.txt', 'r') as reader:
             self.docs_raw = reader.read().split("\n\n")
         self.index = {}
+        self.doc_n = len(self.docs_raw)
 
     def buildIndex(self):
         with open('statics/doc/documents.txt', 'r') as reader:
@@ -90,15 +91,34 @@ class Indexer:
         # print(answer)
         return answer
 
+    def search_general(self, field, word):
+        res = {}
+        if field == 'content':
+            for doc in self.index[word]:
+                prev = -1e9
+                words = re.split(r"[\s]", indexer.docs_raw[doc])
+                for _, _, pos in self.index[word][doc]:
+                    if pos <= prev + 5: continue
+                    context = " ".join(words[max(0, pos - 5): min(len(words), pos + 5)])
+                    context = context.replace(" " + words[pos] + " ", f" <span class='highlight'>{words[pos]}</span> ")
+                    if context.startswith(words[pos]):
+                        context = f" <span class='highlight'>{words[pos]}</span> " + context[len(words[pos]):]
+                    res.setdefault(doc, []).append(context)
+                    prev = pos
+
+        return res
+
     def search_content(self, q1, q2, k, where, pre):
         res = {}
         for doc, value in sorted(self.proximity(q1, q2, k, where=where, pre=pre).items(), key=lambda x: x[0]):
+            words = re.split(r"[\s]", indexer.docs_raw[doc])
             for w1, w2 in value:
-                words = re.split(r"[\s]", indexer.docs_raw[doc])
                 w1, w2 = min(w1, w2), max(w1, w2)
                 context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
                 context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
                     .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
+                if context.startswith(words[w1]):
+                    context = f" <span class='highlight'>{words[w1]}</span> " + context[len(words[w1]):]
                 res.setdefault(doc, []).append(context)
         return res
 
@@ -112,20 +132,16 @@ def prox_action(data):
     k = int(op.get('within', 1e9))
     command.setdefault('content', []) \
         .append((q1, q2, k, where, pre))
-    return data
 
 
-class Action1:
-    def __init__(self, data):
-        dd = data[0].asDict()
-        self.field = dd['field']
-        if 'value' in dd:
-            self.value = dd['value']
-        elif 'prox' in dd:
-            self.value = prox_action(dd['prox'])
-
-    def __repr__(self):
-        return f'<Query ({self.field} : {self.value})>'
+def Action1(data):
+    dd = data[0].asDict()
+    if 'value' in dd:
+        command.setdefault('content', []).\
+            append((dd['value'], None, None, None, None))
+    elif 'prox' in dd:
+        prox_action(dd['prox'])
+    return 'content', len(command['content']) - 1
 
 
 class Action2:
@@ -157,12 +173,45 @@ def paste():
 def search():
     query = request.form.get('query')
     command.clear()
-    query_parser.parse(query)
-    response = {}
+    boolean = query_parser.parse(query).__repr__()
+    print(boolean)
+    response_tmp = {}
     if "content" in command:
         for q1, q2, k, where, pre in command['content']:
-            response = indexer.search_content(q1, q2, k, where, pre)
-    return Response(json.dumps({'data': response}), content_type='application/json')
+            if not q2: response_tmp.setdefault("content", []).append(indexer.search_general('content', q1))
+            else: response_tmp.setdefault("content", []).append(indexer.search_content(q1, q2, k, where, pre))
+
+    def and_(*params):
+        sets = [set(response_tmp[field][i].keys()) for field, i in params]
+        docs = sets[0].intersection(*sets[1:])
+        field_ret, i_ret = params[0]
+        temp = {}
+        for field, i in params:
+            for doc in docs:
+                temp.setdefault(doc, []).extend(response_tmp[field][i][doc])
+        response_tmp[field_ret][i_ret] = temp
+        return field_ret, i_ret
+
+    def or_(*params):
+        sets = [set(response_tmp[field][i].keys()) for field, i in params]
+        docs = sets[0].union(*sets[1:])
+        field_ret, i_ret = params[0]
+        temp = {}
+        for field, i in params:
+            for doc in docs:
+                temp.setdefault(doc, []).extend(response_tmp[field][i].get(doc, []))
+        response_tmp[field_ret][i_ret] = temp
+        return field_ret, i_ret
+
+    def not_(param):
+        (field_, i_), temp = param, {}
+        for doc_id in set(range(indexer.doc_n)) - set(response_tmp[field_][i_].keys()):
+            temp[doc_id] = ["Result Unavailable"]
+        response_tmp[field_][i_] = temp
+        return field_, i_
+
+    field, i = eval(boolean)
+    return Response(json.dumps({'data': response_tmp[field][i]}), content_type='application/json')
 
 
 Parser.build_parser(clauses=[group_1, group_2, group_3], actions=[Action1, Action2, Action3])
