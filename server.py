@@ -3,53 +3,12 @@ from flask import request
 from flask import render_template
 from flask import Response, json
 from gevent import pywsgi
-import heapq
 import re
 
+from boolean_parser.parsers import Parser
+from query_parser import group_1, group_2, group_3
+
 app = Flask(__name__, template_folder="templates", static_folder="statics", static_url_path="/static")
-
-
-@app.route('/', methods=['GET'])
-def paste():
-    return render_template("index.html")
-
-
-@app.route('/search', methods=['POST'])
-def search():
-    # GET: request.args.get('text')
-    query = request.form.get('query')
-    parsed_query = Parser(query)
-    if not parsed_query:
-        return Response(json.dumps({'code': -1}), content_type='application/json')
-    q1, q2, k, where, pre = parsed_query
-    response = {}
-    for doc, value in sorted(indexer.proximity(q1, q2, k, where=where, pre=pre).items(), key=lambda x: x[0]):
-        for w1, w2 in value:
-            words = re.split(r"[\s]", indexer.docs_raw[doc])
-            w1, w2 = min(w1, w2), max(w1, w2)
-            context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
-            context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
-                .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
-            response.setdefault(doc, []).append(context)
-    return Response(json.dumps({'data': response}), content_type='application/json')
-
-
-def Parser(query):
-    query = query.split()
-    if len(query) < 3: return None
-    q1, op, q2 = query
-    pre, foo = op.split("/")
-    if "^" in foo:
-        where, k = foo.split('^')
-        where = where.upper()
-        k = 1e9 if k == '-' else int(k)
-    elif foo.upper() == 'S':
-        where, k = 'S', 1e9
-    elif foo.upper() == 'P':
-        where, k = 'P', 1e9
-    else:
-        where, k = 'D', int(foo)
-    return q1, q2, k, where, pre != ""
 
 
 class Indexer:
@@ -128,12 +87,89 @@ class Indexer:
                         cp1 = [p for p in p1 if p[0] == pid and p[1] == sid]
                         for key, value in self.foo(cp1, cp2, doc_id, pre, k).items():
                             answer.setdefault(key, []).extend(value)
-        print(answer)
+        # print(answer)
         return answer
 
+    def search_content(self, q1, q2, k, where, pre):
+        res = {}
+        for doc, value in sorted(self.proximity(q1, q2, k, where=where, pre=pre).items(), key=lambda x: x[0]):
+            for w1, w2 in value:
+                words = re.split(r"[\s]", indexer.docs_raw[doc])
+                w1, w2 = min(w1, w2), max(w1, w2)
+                context = " ".join(words[max(0, w1 - 5): min(len(words), w2 + 5)])
+                context = context.replace(" " + words[w1] + " ", f" <span class='highlight'>{words[w1]}</span> ") \
+                    .replace(" " + words[w2] + " ", f" <span class='highlight'>{words[w2]}</span> ")
+                res.setdefault(doc, []).append(context)
+        return res
 
+
+def prox_action(data):
+    q1 = data['q1']
+    q2 = data['q2']
+    op = data['op']
+    pre = 'order' in op
+    where = op.get('type', 'D').upper()
+    k = int(op.get('within', 1e9))
+    command.setdefault('content', []) \
+        .append((q1, q2, k, where, pre))
+    return data
+
+
+class Action1:
+    def __init__(self, data):
+        dd = data[0].asDict()
+        self.field = dd['field']
+        if 'value' in dd:
+            self.value = dd['value']
+        elif 'prox' in dd:
+            self.value = prox_action(dd['prox'])
+
+    def __repr__(self):
+        return f'<Query ({self.field} : {self.value})>'
+
+
+class Action2:
+    def __init__(self, data):
+        dd = data[0].asDict()
+        self.field = dd['field']
+        self.value = dd['value']
+
+    def __repr__(self):
+        return f'<Query ({self.field} : {self.value})>'
+
+
+class Action3:
+    def __init__(self, data):
+        dd = data[0].asDict()
+        self.field = dd['field']
+        self.value = dd['value']
+
+    def __repr__(self):
+        return f'<Query ({self.field} : {self.value})>'
+
+
+@app.route('/', methods=['GET'])
+def paste():
+    return render_template("index.html")
+
+
+@app.route('/search', methods=['POST'])
+def search():
+    query = request.form.get('query')
+    command.clear()
+    query_parser.parse(query)
+    response = {}
+    if "content" in command:
+        for q1, q2, k, where, pre in command['content']:
+            response = indexer.search_content(q1, q2, k, where, pre)
+    return Response(json.dumps({'data': response}), content_type='application/json')
+
+
+Parser.build_parser(clauses=[group_1, group_2, group_3], actions=[Action1, Action2, Action3])
+query_parser = Parser()
 indexer = Indexer()
 indexer.buildIndex()
+command = {}
 server = pywsgi.WSGIServer(("localhost", 8000), app)
 try:
     server.serve_forever()

@@ -25,7 +25,7 @@ $(function() {
                 $("#result_list").hide()
                 $("#result_list").html(list);
                 $("#result_list").fadeIn(500);
-                $("#search_input").val("");
+                $('#search_input').focus().select();
                 return false;
             }
         });
